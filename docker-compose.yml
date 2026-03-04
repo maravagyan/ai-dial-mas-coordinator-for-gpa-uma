@@ -5,10 +5,9 @@ services:
       - "3001:8080"
 
   chat:
+    image: epam/ai-dial-chat:development
     ports:
       - "3000:3000"
-    image: epam/ai-dial-chat:development
-#    platform: linux/amd64
     depends_on:
       - themes
       - core
@@ -16,6 +15,7 @@ services:
       NEXTAUTH_SECRET: "secret"
       THEMES_CONFIG_HOST: "http://themes:8080"
       DIAL_API_HOST: "http://core:8080"
+      # This is the INTERNAL DIAL key name configured in core/config.json -> keys -> dial_api_key
       DIAL_API_KEY: "dial_api_key"
       ENABLED_FEATURES: "conversations-section,prompts-section,top-settings,top-clear-conversation,top-chat-info,top-chat-model-settings,empty-chat-settings,header,footer,request-api-key,report-an-issue,likes,conversations-sharing,prompts-sharing,input-files,attachments-manager,conversations-publishing,prompts-publishing,custom-logo,input-links,custom-applications,message-templates,marketplace,quick-apps,code-apps,mindmap-apps"
       KEEP_ALIVE_TIMEOUT: ${CHAT_KEEP_ALIVE_TIMEOUT:-20000}
@@ -43,20 +43,23 @@ services:
 
   core:
     user: ${UID:-root}
+    image: epam/ai-dial-core:development
     ports:
       - "8080:8080"
-    image: epam/ai-dial-core:development
-    environment:
-      'AIDIAL_SETTINGS': '/opt/settings/settings.json'
-      'JAVA_OPTS': '-Dgflog.config=/opt/settings/gflog.xml'
-      'LOG_DIR': '/app/log'
-      'STORAGE_DIR': '/app/data'
-      'aidial.config.files': '["/opt/config/config.json"]'
-      'aidial.storage.overrides': '{ "jclouds.filesystem.basedir": "data" }'
-      'aidial.redis.singleServerConfig.address': 'redis://redis:6379'
-      'LOG_LEVEL': "DEBUG"
     depends_on:
       - redis
+    environment:
+      # IMPORTANT: required if core/config.json uses "key": "${DIAL_API_KEY}"
+      DIAL_API_KEY: ${DIAL_API_KEY}
+
+      AIDIAL_SETTINGS: "/opt/settings/settings.json"
+      JAVA_OPTS: "-Dgflog.config=/opt/settings/gflog.xml"
+      LOG_DIR: "/app/log"
+      STORAGE_DIR: "/app/data"
+      aidial.config.files: '["/opt/config/config.json"]'
+      aidial.storage.overrides: '{ "jclouds.filesystem.basedir": "data" }'
+      aidial.redis.singleServerConfig.address: "redis://redis:6379"
+      LOG_LEVEL: "DEBUG"
     volumes:
       - ./settings:/opt/settings
       - ${DIAL_DIR:-.}/core:/opt/config
@@ -65,11 +68,15 @@ services:
 
   adapter-dial:
     image: epam/ai-dial-adapter-dial:development
+    depends_on:
+      - core
     environment:
       DIAL_URL: "http://core:8080"
       LOG_LEVEL: "INFO"
 
-# UMS
+  # -------------------------
+  # UMS stack
+  # -------------------------
   userservice:
     image: khshanovskyi/mockuserservice:latest
     ports:
@@ -82,10 +89,10 @@ services:
       - ./data:/app/data
 
   ums-mcp-server:
+    image: khshanovskyi/ums-mcp-server:latest
     depends_on:
       - redis
       - userservice
-    image: khshanovskyi/ums-mcp-server:latest
     ports:
       - "8041:8005"
     environment:
@@ -94,10 +101,10 @@ services:
       - ./data:/app/data
 
   ums-agent:
+    image: khshanovskyi/dial-ums-agent:latest
     depends_on:
       - redis
       - ums-mcp-server
-    image: khshanovskyi/dial-ums-agent:latest
     ports:
       - "8042:8000"
     environment:
@@ -111,7 +118,9 @@ services:
       - ./data:/app/data
       - /var/run/docker.sock:/var/run/docker.sock
 
-# General-purpose Agent
+  # -------------------------
+  # GPA stack
+  # -------------------------
   python-interpreter-mcp-server:
     image: khshanovskyi/python-code-interpreter-mcp-server:latest
     ports:
@@ -134,11 +143,11 @@ services:
     cpus: 0.5
 
   general-purpose-agent:
+    image: khshanovskyi/dial-gpa-agent:latest
     depends_on:
       - redis
       - python-interpreter-mcp-server
       - ddg-search-mcp-server
-    image: khshanovskyi/dial-gpa-agent:latest
     ports:
       - "8052:5000"
     environment:

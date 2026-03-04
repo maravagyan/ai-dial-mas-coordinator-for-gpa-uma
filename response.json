@@ -1,0 +1,1 @@
+{"choices":[{"index":0,"finish_reason":"stop","message":{"role":"assistant","content":"Hello! How can I assist you today?","custom_content":{"state":{"tool_call_history":[]}}}}],"usage":null,"id":"17979bfc-11ce-46c4-954d-4af655f7f9ce","created":1772613331,"object":"chat.completion"}
